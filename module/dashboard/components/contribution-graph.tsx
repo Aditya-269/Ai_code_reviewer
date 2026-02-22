@@ -1,6 +1,5 @@
 "use client";
 
-"use client";
 import React from 'react'
 import { ActivityCalendar } from "react-activity-calendar"
 import { useTheme } from 'next-themes';
@@ -9,13 +8,29 @@ import { getContributionStats } from '../actions';
 // import {getContributionStats} from ""
 
 const ContributionGraph = () => {
+    console.log("[ContributionGraph] Component mounted/rendered");
     const { theme } = useTheme();
-
-const { data: isLoading } = useQuery({
-  queryKey: ["contribution-graph"],
-  queryFn: async () => await getContributionStats(),
-  staleTime: 1000 * 60 * 5,
+const { data, isLoading, error } = useQuery({
+  queryKey: ["contribution-graph-v2"], // Changed key to force refetch
+  queryFn: async () => {
+    console.log("[ContributionGraph] React Query calling getContributionStats...");
+    try {
+      const result = await getContributionStats();
+      console.log("[ContributionGraph] Result from getContributionStats:", result);
+      return result;
+    } catch (err: any) {
+      console.error("[ContributionGraph] Error in queryFn:", err);
+      throw err;
+    }
+  },
+  staleTime: 0, // Disable cache for debugging
+  retry: false,
+  refetchOnMount: true,
 });
+
+console.log("[ContributionGraph] Loading:", isLoading);
+console.log("[ContributionGraph] Data:", data);
+console.log("[ContributionGraph] Error:", error);
 
 if (isLoading) {
   return (
@@ -26,11 +41,45 @@ if (isLoading) {
     </div>
   );
 }
-if (!data || !data.contributions.length) {
+
+if (error) {
+  return (
+    <div className="w-full flex flex-col items-center justify-center p-8">
+      <div className="text-red-500">
+        Error loading contributions: {error.message}
+      </div>
+    </div>
+  );
+}
+
+if (!data) {
+    console.log("[ContributionGraph] Data is null or undefined:", data);
     return (
       <div className="w-full flex flex-col items-center justify-center p-8">
         <div className="text-muted-foreground">
-          No contribution data available
+          No contribution data available (data is null)
+        </div>
+      </div>
+    );
+  }
+
+  if (!data.contributions) {
+    console.log("[ContributionGraph] No contributions property:", data);
+    return (
+      <div className="w-full flex flex-col items-center justify-center p-8">
+        <div className="text-muted-foreground">
+          No contribution data available (no contributions property)
+        </div>
+      </div>
+    );
+  }
+
+  if (!data.contributions.length) {
+    console.log("[ContributionGraph] Contributions array is empty:", data);
+    return (
+      <div className="w-full flex flex-col items-center justify-center p-8">
+        <div className="text-muted-foreground">
+          No contribution data available (contributions array is empty)
         </div>
       </div>
     );
