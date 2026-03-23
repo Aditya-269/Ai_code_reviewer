@@ -22,6 +22,7 @@ model User {
   updatedAt     DateTime  @updatedAt
   accounts      Account[]
   sessions      Session[]
+  repositories  Repository[]
 
   @@map("user")
 }
@@ -39,6 +40,23 @@ model Session {
 
   @@index([userId])
   @@map("session")
+}
+model Repository {
+  id        String  @id @default(cuid())
+  githubId  BigInt  @unique
+  name      String
+  owner     String
+  fullName  String
+  url       String
+  userId    String
+
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("repository")
 }
 
 model Account {
