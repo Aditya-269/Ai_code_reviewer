@@ -3,7 +3,7 @@
 import prisma from "@/lib/db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
-import { getRepositories } from "@/module/github/lib/github";
+import { createWebhook, getRepositories } from "@/module/github/lib/github";
 
 export const fetchRepositories = async (
   page: number = 1,
@@ -19,19 +19,48 @@ export const fetchRepositories = async (
 
   const githubRepos = await getRepositories(page, perPage);
 
-const dbRepos = await prisma.repository.findMany({
-  where: {
-    userId: session.user.id,
-  },
-});
+  const dbRepos = await prisma.repository.findMany({
+    where: {
+      userId: session.user.id,
+    },
+  });
 
-// Ensure consistent type (BigInt)
-const connectedRepoIds = new Set(
-  dbRepos.map((repo) => repo.githubId.toString())
-);
+  // Ensure consistent type (BigInt)
+  const connectedRepoIds = new Set(
+    dbRepos.map((repo) => repo.githubId.toString())
+  );
 
-return githubRepos.map((repo: any) => ({
-  ...repo,
-  isConnected: connectedRepoIds.has(repo.id.toString()),
-}));
+  return githubRepos.map((repo: any) => ({
+    ...repo,
+    isConnected: connectedRepoIds.has(repo.id.toString()),
+  }));
 };
+
+
+export const connectRepository = async (owner: string, repo: string, githubId: number) => {
+  const session = await auth.api.getSession({
+    headers: await headers()
+  });
+
+  if (!session) {
+    throw new Error("Unauthorized");
+  }
+  // TODO: CHECK IF USER CAN CONNECT MORE REPO
+
+  const webhook = await createWebhook(owner, repo);
+
+  if (webhook) {
+    await prisma.repository.create({
+      data: {
+        githubId: BigInt(githubId),
+        name: repo,
+        owner,
+        fullName: `${owner}/${repo}`,
+        url: `https://github.com/${owner}/${repo}`,
+        userId: session.user.id
+      }
+    });
+  }
+  return webhook;
+
+}
