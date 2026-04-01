@@ -4,8 +4,7 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
+  provider = "postgresql"
 }
 
 model Test {
@@ -53,10 +52,12 @@ model Repository {
 
   user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  reviews   Review[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([userId])
+  @@unique([owner, name])
   @@map("repository")
 }
 
@@ -90,4 +91,22 @@ model Verification {
 
   @@index([identifier])
   @@map("verification")
+}
+
+model Review {
+  id           String   @id @default(cuid())
+  repositoryId String
+  repository   Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  prNumber Int
+  prTitle  String
+  prUrl    String
+  review   String   @db.Text
+  status   String   @default("completed") // completed, failed, pending
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([repositoryId])
+  @@map("review")
 }

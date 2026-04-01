@@ -40,3 +40,5 @@ export const indexRepo = inngest.createFunction(
     };
   }
 );
+
+export { generateReview } from "./review";
