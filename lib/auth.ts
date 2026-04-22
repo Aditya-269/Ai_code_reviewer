@@ -15,7 +15,12 @@ export const auth = betterAuth({
             scope: ["repo"]
         },
     }, 
-    trustedOrigins:["http://localhost:3000","https://bert-waltzlike-garrett.ngrok-free.dev"],
+    trustedOrigins: [
+        "http://localhost:3000",
+        "https://bert-waltzlike-garrett.ngrok-free.dev",
+        process.env.NEXT_PUBLIC_APP_URL as string,
+        process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : ""
+    ].filter(Boolean),
     plugins: [
         polar({
             client: polar_client,
