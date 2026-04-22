@@ -1,6 +1,6 @@
 import { inngest } from "@/inngest/client";
 import prisma from "@/lib/db";
-
+import { canCreateReview,increamentReviewCount } from "@/module/payment/lib/subscription";
 export async function reviewPullRequest(
     owner: string,
     repo: string,
@@ -25,6 +25,10 @@ export async function reviewPullRequest(
         if (!repository) {
             throw new Error(`Repository ${owner}/${repo} not found in database. Please reconnect the repository.`);
         }
+        const canReview = await canCreateReview(repository.user.id, repository.id);
+        if (!canReview) {
+            throw new Error("You have exceeded your review limit. Please upgrade to a pro plan.");
+        }
 
         const githubAccount = repository.user.accounts[0];
         if (!githubAccount?.accessToken) {
@@ -42,6 +46,7 @@ export async function reviewPullRequest(
                 userId: repository.user.id
             }
         });
+        await increamentReviewCount(repository.user.id, repository.id);
 
         return { success: true, message: "Review Queued" };
 
