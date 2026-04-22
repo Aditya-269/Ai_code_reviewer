@@ -11,31 +11,64 @@ export async function generateEmbedding(text: string) {
     return embedding;
 }
 
+function splitTextIntoChunks(text: string, maxChunkSize: number = 2000, overlap: number = 200): string[] {
+    const chunks: string[] = [];
+    let i = 0;
+    
+    while (i < text.length) {
+        let end = i + maxChunkSize;
+        
+        if (end < text.length) {
+            const lastNewline = text.lastIndexOf('\n', end);
+            const lastSpace = text.lastIndexOf(' ', end);
+            
+            if (lastNewline > i + maxChunkSize / 2) {
+                end = lastNewline + 1;
+            } else if (lastSpace > i + maxChunkSize / 2) {
+                end = lastSpace + 1;
+            }
+        }
+        
+        chunks.push(text.slice(i, end));
+        i = end - overlap;
+    }
+    
+    return chunks;
+}
 
 export async function indexCodebase(
     repoId: string,
     files: { path: string; content: string }[]
 ) {
     const vectors: any[] = [];
+    let totalChunks = 0;
+    let successfulChunks = 0;
 
     for (const file of files) {
         const content = `File: ${file.path}\n\n${file.content}`;
-        const truncatedContent = content.slice(0, 8000);
+        const chunks = splitTextIntoChunks(content, 2000, 200);
+        totalChunks += chunks.length;
 
-        try {
-            const embedding = await generateEmbedding(truncatedContent);
+        console.log(`[RAG] Indexed ${file.path}: Split into ${chunks.length} chunks.`);
 
-            vectors.push({
-                id: `${repoId}-${file.path.replace(/\//g, "_")}`,
-                values: embedding,
-                metadata: {
-                    repoId,
-                    path: file.path,
-                    content: truncatedContent,
-                },
-            });
-        } catch (e) {
-            console.error(`Failed to embed ${file.path}:`, e);
+        for (let i = 0; i < chunks.length; i++) {
+            const chunk = chunks[i];
+            try {
+                const embedding = await generateEmbedding(chunk);
+
+                vectors.push({
+                    id: `${repoId}-${file.path.replace(/\//g, "_")}-chunk-${i}`,
+                    values: embedding,
+                    metadata: {
+                        repoId,
+                        path: file.path,
+                        content: chunk,
+                    },
+                });
+                successfulChunks++;
+            } catch (e) {
+                console.error(`Failed to embed chunk ${i} of ${file.path}:`, e);
+            }
         }
     }
     if (vectors.length > 0) {
@@ -48,12 +81,13 @@ export async function indexCodebase(
     }
 
     const result = {
-        indexed: vectors.length,
-        failed: files.length - vectors.length,
-        total: files.length,
+        indexedFiles: files.length,
+        totalChunks: totalChunks,
+        indexedChunks: successfulChunks,
+        failedChunks: totalChunks - successfulChunks,
     };
 
-    console.log(`Indexing complete: ${result.indexed}/${result.total} files indexed`);
+    console.log(`Indexing complete: ${result.indexedChunks}/${result.totalChunks} chunks indexed across ${result.indexedFiles} files`);
     return result;
 }
 export async function retrieveContext(
