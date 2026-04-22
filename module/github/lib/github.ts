@@ -149,6 +149,18 @@ export async function getRepoFileContents(
 ): Promise<{ path: string; content: string }[]> {
   const octokit = new Octokit({ auth: token });
 
+  const isIgnored = (filePath: string) => {
+    const ignoredExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.pdf', '.zip', '.tar', '.gz', '.mp4', '.mp3', '.lock', '.lockb'];
+    const ignoredFiles = ['package-lock.json', 'yarn.lock', 'pnpm-lock.yaml', 'bun.lock', 'bun.lockb', '.DS_Store'];
+    const ignoredDirs = ['node_modules', '.git', '.next', 'dist', 'build', 'coverage'];
+
+    const fileName = filePath.split('/').pop() || '';
+    if (ignoredFiles.includes(fileName)) return true;
+    if (ignoredExtensions.some(ext => filePath.toLowerCase().endsWith(ext))) return true;
+    if (ignoredDirs.some(dir => filePath === dir || filePath.startsWith(`${dir}/`) || filePath.includes(`/${dir}/`))) return true;
+    return false;
+  };
+
   const { data } = await octokit.rest.repos.getContent({
     owner,
     repo,
@@ -156,54 +168,46 @@ export async function getRepoFileContents(
   });
 
   if (!Array.isArray(data)) {
-  // It's a file
-  if (data.type === "file" && data.content) {
-    return [
-      {
-        path: data.path,
-        content: Buffer.from(data.content, "base64").toString("utf-8"),
-      },
-    ];
+    if (data.type === "file" && data.content && !isIgnored(data.path)) {
+      return [
+        {
+          path: data.path,
+          content: Buffer.from(data.content, "base64").toString("utf-8"),
+        },
+      ];
+    }
+    return [];
   }
 
-  return [];
-}
-let files: { path: string; content: string }[] = [];
+  let files: { path: string; content: string }[] = [];
 
-for (const item of data) {
-  if (item.type === "file") {
-    const { data: fileData } = await octokit.rest.repos.getContent({
-      owner,
-      repo,
-      path: item.path,
-    });
+  for (const item of data) {
+    if (isIgnored(item.path)) continue;
 
-    if (
-      !Array.isArray(fileData) &&
-      fileData.type === "file" &&
-      fileData.content
-    ) {
-      // Filter out non-code files if needed (images, etc.)
-      // For now, let's include everything that looks like text
-      if (!item.path.match(/\.(png|jpg|jpeg|gif|svg|ico|pdf|zip|tar|gz)$/i)) {
+    if (item.type === "file") {
+      const { data: fileData } = await octokit.rest.repos.getContent({
+        owner,
+        repo,
+        path: item.path,
+      });
+
+      if (
+        !Array.isArray(fileData) &&
+        fileData.type === "file" &&
+        fileData.content
+      ) {
         files.push({
           path: item.path,
           content: Buffer.from(fileData.content, "base64").toString("utf-8"),
         });
       }
+    } else if (item.type === "dir") {
+      const subFiles = await getRepoFileContents(token, owner, repo, item.path);
+      files = files.concat(subFiles);
     }
-  } else if (item.type === "dir") {
-    const subFiles = await getRepoFileContents(token, owner, repo, item.path);
-    files =files.concat(subFiles)
-    
   }
-}
 
-return files;
-
-
-
-
+  return files;
 }
 export async function getPullRequestDiff(
     token: string,
