@@ -30,13 +30,13 @@ export const indexRepo = inngest.createFunction(
     });
 
     // Step 3: Index the codebase into Pinecone via embeddings
-    await step.run("index-codebase", async () => {
+    const indexResult = await step.run("index-codebase", async () => {
       return await indexCodebase(`${owner}/${repo}`, files);
     });
 
     return {
       success: true,
-      indexedFiles: files.length,
+      ...indexResult
     };
   }
 );
